@@ -30,7 +30,10 @@ function parseInspectionValue(rawValue) {
 }
 
 function isAbsolutePath(input) {
-  return typeof input === "string" && input.startsWith("/");
+  if (typeof input !== "string") return false;
+  if (input.startsWith("/")) return true;
+  if (/^[A-Za-z]:[/\\]/.test(input)) return true;
+  return false;
 }
 
 const ERROR_CODES = {

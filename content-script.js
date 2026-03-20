@@ -34,7 +34,12 @@
   };
 
   function isAbsolutePath(input) {
-    return typeof input === "string" && input.startsWith("/");
+    if (typeof input !== "string") return false;
+    // macOS/Linux: starts with /
+    if (input.startsWith("/")) return true;
+    // Windows: D:\ or D:/
+    if (/^[A-Za-z]:[/\\]/.test(input)) return true;
+    return false;
   }
 
   function normalizeRoot(rootPath) {

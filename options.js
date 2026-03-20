@@ -39,13 +39,22 @@ function serializeHosts(hosts) {
   return Array.isArray(hosts) ? hosts.join("\n") : "";
 }
 
+function isAbsoluteRootPath(p) {
+  if (typeof p !== "string") return false;
+  // macOS/Linux: starts with /
+  if (p.startsWith("/")) return true;
+  // Windows: D:\ or D:/
+  if (/^[A-Za-z]:[/\\]/.test(p)) return true;
+  return false;
+}
+
 function validateSettings(settings) {
   if (!settings.attrName.trim()) {
     return "Attribute name is required.";
   }
 
-  if (settings.workspaceRoot && !settings.workspaceRoot.startsWith("/")) {
-    return "Workspace root must be an absolute macOS path.";
+  if (settings.workspaceRoot && !isAbsoluteRootPath(settings.workspaceRoot)) {
+    return "Workspace root must be an absolute path (e.g. /Users/name/project or D:\\project).";
   }
 
   if (settings.enabledHosts.length === 0) {
