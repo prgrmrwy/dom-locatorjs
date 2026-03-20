@@ -42,12 +42,17 @@
     return false;
   }
 
+  function normalizeSeparators(p) {
+    // Convert Windows backslashes to forward slashes
+    return String(p || "").replace(/\\/g, "/");
+  }
+
   function normalizeRoot(rootPath) {
-    return String(rootPath || "").replace(/\/+$/, "");
+    return normalizeSeparators(rootPath).replace(/\/+$/, "");
   }
 
   function normalizeRelativePath(relativePath) {
-    return String(relativePath || "").replace(/^\/+/, "");
+    return normalizeSeparators(relativePath).replace(/^\/+/, "");
   }
 
   function joinAbsolutePath(rootPath, relativePath) {
@@ -55,7 +60,13 @@
   }
 
   function encodeAbsolutePath(absolutePath) {
-    return absolutePath
+    // Normalize separators first, then ensure a leading / for vscode:// URLs.
+    // Windows: "D:/path" → "/D:/path"; Unix: "/path" stays "/path".
+    let p = normalizeSeparators(absolutePath);
+    if (!p.startsWith("/")) {
+      p = "/" + p;
+    }
+    return p
       .split("/")
       .map((segment) => encodeURIComponent(segment))
       .join("/");
