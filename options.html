@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DOM Locator Settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="panel">
+        <div class="eyebrow">DOM Locator</div>
+        <h1>Extension Settings</h1>
+        <p class="intro">
+          Configure the workspace root and host rules used to resolve DOM inspection metadata into local file paths.
+        </p>
+
+        <form id="settings-form" class="form">
+          <label class="field">
+            <span>Workspace Root</span>
+            <input
+              id="workspaceRoot"
+              name="workspaceRoot"
+              type="text"
+              placeholder="/Users/yourname/workspace/project"
+              autocomplete="off"
+            />
+            <small>Required for opening files. macOS absolute path only.</small>
+          </label>
+
+          <label class="field">
+            <span>Attribute Name</span>
+            <input id="attrName" name="attrName" type="text" placeholder="data-insp-path" autocomplete="off" />
+            <small>The DOM attribute that stores the source location.</small>
+          </label>
+
+          <label class="field">
+            <span>Enabled Hosts</span>
+            <textarea
+              id="enabledHosts"
+              name="enabledHosts"
+              rows="6"
+              placeholder="localhost&#10;*.test.byted.org"
+            ></textarea>
+            <small>One host rule per line. Supports exact host, <code>*</code>, and <code>*.suffix</code>.</small>
+          </label>
+
+          <label class="field">
+            <span>Modifier Key</span>
+            <select id="modifierKey" name="modifierKey">
+              <option value="Alt">Alt</option>
+            </select>
+            <small>Current MVP only supports Alt on macOS.</small>
+          </label>
+
+          <div class="actions">
+            <button type="submit" class="primary">Save</button>
+            <button type="button" id="resetButton">Reset Defaults</button>
+            <button type="button" id="testButton">Test VS Code Link</button>
+          </div>
+        </form>
+
+        <div id="status" class="status" aria-live="polite"></div>
+
+        <section class="help">
+          <h2>Usage</h2>
+          <ul>
+            <li>Load this extension with Chrome Developer Mode and <code>Load unpacked</code>.</li>
+            <li>Open a matching development page.</li>
+            <li>Hold <code>Alt</code> to inspect elements with source metadata.</li>
+            <li>Click while holding <code>Alt</code> to open the matched file in VS Code.</li>
+          </ul>
+        </section>
+      </section>
+    </main>
+
+    <script src="options.js"></script>
+  </body>
+</html>

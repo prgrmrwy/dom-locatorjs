@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "DOM Locator",
+  "version": "0.1.0",
+  "description": "Highlight DOM nodes with inspection metadata and open their source in VS Code.",
+  "permissions": ["storage", "activeTab", "tabs"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content-script.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "options_page": "options.html",
+  "action": {
+    "default_title": "DOM Locator"
+  }
+}
