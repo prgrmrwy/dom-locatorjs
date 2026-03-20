@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>DOM Locator — P0 Test Fixture</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "SF Mono", "Menlo", monospace;
+      font-size: 13px;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 24px;
+      line-height: 1.6;
+    }
+    h1 { color: #7dd3fc; font-size: 18px; margin: 0 0 4px; }
+    h2 { color: #94a3b8; font-size: 13px; font-weight: normal; margin: 0 0 24px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .card {
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 16px;
+      background: rgba(255,255,255,0.03);
+    }
+    .card-title {
+      font-size: 11px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+    }
+    .card-label {
+      color: #fbbf24;
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+    .target {
+      display: inline-block;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .target-ok    { background: rgba(15,118,110,0.2);  border: 1px solid rgba(15,118,110,0.5);  color: #5eead4; }
+    .target-err   { background: rgba(239,68,68,0.1);   border: 1px solid rgba(239,68,68,0.4);   color: #fca5a5; }
+    .target-warn  { background: rgba(245,158,11,0.1);  border: 1px solid rgba(245,158,11,0.4);  color: #fcd34d; }
+    .note {
+      margin-top: 8px;
+      font-size: 11px;
+      color: #475569;
+      line-height: 1.5;
+    }
+    .note b { color: #94a3b8; }
+    hr { border: none; border-top: 1px solid rgba(255,255,255,0.06); margin: 24px 0; }
+    .legend {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+      font-size: 11px;
+    }
+    .legend span { color: #94a3b8; }
+    .badge {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: bold;
+      margin-right: 4px;
+    }
+    .badge-r { background: #1e3a5f; color: #7dd3fc; }
+    .badge-v { background: #14532d; color: #86efac; }
+    .badge-d { background: #4c1d95; color: #c4b5fd; }
+  </style>
+</head>
+<body>
+  <h1>🔍 DOM Locator — P0 Test Fixture</h1>
+  <h2>
+    使用方法：加载扩展后打开此页面（需将 localhost 加入 Enabled Hosts）。<br>
+    按住 Alt 悬停各元素观察 tooltip，点击观察诊断面板。
+  </h2>
+
+  <div class="legend">
+    <span><span class="badge badge-r">R</span> 复现（无插件是否遇到问题）</span>
+    <span><span class="badge badge-v">V</span> 验证（插件是否解决）</span>
+    <span><span class="badge badge-d">D</span> 检测（插件是否诊断出原因）</span>
+  </div>
+
+  <div class="grid">
+
+    <!-- TC-01: Happy path -->
+    <div class="card">
+      <div class="card-title">TC-01 · Happy Path</div>
+      <div class="card-label">✅ 正常路径 — 应成功打开 VS Code</div>
+      <div
+        class="target target-ok"
+        data-insp-path="src/components/Button.tsx:42:5"
+      >
+        Alt+Click me → open VS Code
+      </div>
+      <div class="note">
+        <b>前置条件：</b>Workspace Root 已设置为绝对路径。<br>
+        <b>[R]</b> 无插件：浏览器无任何反应。<br>
+        <b>[V]</b> 有插件：触发 vscode:// 链接，VS Code 打开文件。<br>
+        <b>[D]</b> Tooltip 显示路径 + 行列，无错误码。
+      </div>
+    </div>
+
+    <!-- TC-02: E_ATTR_MISSING -->
+    <div class="card">
+      <div class="card-title">TC-02 · E_ATTR_MISSING <span class="badge badge-d">D2</span></div>
+      <div class="card-label">❌ 无 data-insp-path 属性</div>
+      <div
+        class="target target-err"
+        data-something-else="not-the-right-attr"
+      >
+        Alt+Click me → E_ATTR_MISSING
+      </div>
+      <div class="note">
+        <b>[R]</b> 无插件：点击无响应。<br>
+        <b>[D]</b> 有插件：诊断面板显示 <b>E_ATTR_MISSING</b>，phase=attr。<br>
+        对应问题：D2 — attr key 不匹配时无诊断。
+      </div>
+    </div>
+
+    <!-- TC-03: E_PARSE_INVALID — no line/col -->
+    <div class="card">
+      <div class="card-title">TC-03 · E_PARSE_INVALID — 无行列号 <span class="badge badge-d">A1</span></div>
+      <div class="card-label">❌ 只有路径，没有行列号</div>
+      <div
+        class="target target-err"
+        data-insp-path="src/App.tsx"
+      >
+        Alt+Click me → E_PARSE_INVALID
+      </div>
+      <div class="note">
+        <b>[R]</b> 无插件：点击无响应。<br>
+        <b>[D]</b> 有插件：诊断面板显示 <b>E_PARSE_INVALID</b>，phase=parse，raw 值可见。
+      </div>
+    </div>
+
+    <!-- TC-04: E_PARSE_INVALID — malformed colons -->
+    <div class="card">
+      <div class="card-title">TC-04 · E_PARSE_INVALID — 纯冒号垃圾 <span class="badge badge-d">A1</span></div>
+      <div class="card-label">❌ 空路径段 + 行列</div>
+      <div
+        class="target target-err"
+        data-insp-path=":42:5"
+      >
+        Alt+Click me → E_PARSE_INVALID
+      </div>
+      <div class="note">
+        <b>[D]</b> 有插件：<b>E_PARSE_INVALID</b>，空路径段无法被接受。
+      </div>
+    </div>
+
+    <!-- TC-05: E_ROOT_EMPTY -->
+    <div class="card">
+      <div class="card-title">TC-05 · E_ROOT_EMPTY <span class="badge badge-d">E1</span></div>
+      <div class="card-label">⚠️ 路径合法，但 Workspace Root 未配置</div>
+      <div
+        class="target target-warn"
+        data-insp-path="src/App.tsx:10:1"
+        id="tc05"
+      >
+        Alt+Click me → E_ROOT_EMPTY<br>
+        <small style="font-size:10px;color:#94a3b8">(需先清空 Root 后测试)</small>
+      </div>
+      <div class="note">
+        <b>[R]</b> 无插件 + 无 Root：点击静默失败，无任何提示。<br>
+        <b>[D]</b> 有插件：<b>E_ROOT_EMPTY</b>，phase=map，面包屑 attr✓→parse✓→map✗。
+      </div>
+    </div>
+
+    <!-- TC-06: path:line:col (standard 3-part) — parser fix regression -->
+    <div class="card">
+      <div class="card-title">TC-06 · 标准 3 段格式（Parser Bug 回归）<span class="badge badge-r">A1</span></div>
+      <div class="card-label">✅ 修复前：path:line:col 解析失败</div>
+      <div
+        class="target target-ok"
+        data-insp-path="src/hooks/useAuth.ts:88:3"
+      >
+        Alt+Click me → 修复后正常解析
+      </div>
+      <div class="note">
+        <b>[R]</b> 修复前：3 段格式触发 E_PARSE_INVALID（off-by-one bug）。<br>
+        <b>[V]</b> 修复后（length-1 fix）：正常解析，tooltip 显示路径。<br>
+        <b>这是本次回测发现的 P0 级 bug，已在 fix commit 中修复。</b>
+      </div>
+    </div>
+
+    <!-- TC-07: path:line:col:extra (4-part) — A1 format variability -->
+    <div class="card">
+      <div class="card-title">TC-07 · 4 段格式（带 extra）<span class="badge badge-v">A1</span></div>
+      <div class="card-label">✅ 额外冒号段被正确忽略</div>
+      <div
+        class="target target-ok"
+        data-insp-path="src/App.tsx:42:5:0"
+      >
+        Alt+Click me → extra "0" 被忽略
+      </div>
+      <div class="note">
+        <b>[V]</b> 有插件：extra 字段不影响解析，正常显示路径 42:5。<br>
+        对应问题：A1 — format variability。
+      </div>
+    </div>
+
+    <!-- TC-08: path with spaces -->
+    <div class="card">
+      <div class="card-title">TC-08 · 路径含空格 <span class="badge badge-v">A2</span></div>
+      <div class="card-label">✅ 空格应被 %20 编码</div>
+      <div
+        class="target target-ok"
+        data-insp-path="src/My Component/index.tsx:10:1"
+      >
+        Alt+Click me → 空格编码验证
+      </div>
+      <div class="note">
+        <b>[R]</b> 未编码时：vscode:// URL 含空格，部分系统/浏览器拒绝。<br>
+        <b>[V]</b> 有插件：buildVsCodeUrl 将路径段 encodeURIComponent 处理。
+      </div>
+    </div>
+
+    <!-- TC-09: non-integer line (C2) -->
+    <div class="card">
+      <div class="card-title">TC-09 · 非整数行号 <span class="badge badge-d">C2</span></div>
+      <div class="card-label">❌ 行号为 "abc"</div>
+      <div
+        class="target target-err"
+        data-insp-path="src/App.tsx:abc:5"
+      >
+        Alt+Click me → E_PARSE_INVALID
+      </div>
+      <div class="note">
+        <b>[R]</b> 修复前：静默打开空白 tab 或无反应（C2）。<br>
+        <b>[D]</b> 有插件：<b>E_PARSE_INVALID</b>，parse 阶段拦截。
+      </div>
+    </div>
+
+    <!-- TC-10: Copy debug bundle (E3) -->
+    <div class="card">
+      <div class="card-title">TC-10 · Copy Debug Bundle <span class="badge badge-d">E3</span></div>
+      <div class="card-label">⚠️ 验证"一键复制诊断包"功能</div>
+      <div
+        class="target target-warn"
+        data-insp-path="src/broken:oops"
+      >
+        Alt+Click me → 点击面板 "Copy debug info"
+      </div>
+      <div class="note">
+        <b>[R]</b> 修复前：用户无法获取结构化 debug 信息。<br>
+        <b>[V]</b> 有插件：面板出现 "Copy debug info" 按钮，点击后剪贴板有 JSON。
+      </div>
+    </div>
+
+  </div>
+
+  <hr>
+
+  <div style="color:#475569;font-size:11px;line-height:1.8">
+    <b style="color:#64748b">测试清单：</b><br>
+    □ TC-01: Alt+hover 显示 tooltip，点击触发 VS Code（需 Root 已配置）<br>
+    □ TC-02: 诊断面板出现 E_ATTR_MISSING，phase=attr<br>
+    □ TC-03: 诊断面板出现 E_PARSE_INVALID，raw 值可读<br>
+    □ TC-04: 诊断面板出现 E_PARSE_INVALID（空路径段）<br>
+    □ TC-05: 诊断面板出现 E_ROOT_EMPTY，breadcrumb: attr✓→parse✓→map✗→open○<br>
+    □ TC-06: tooltip 正常显示 3 段路径（回归验证 parser fix）<br>
+    □ TC-07: tooltip 显示路径，extra "0" 被忽略<br>
+    □ TC-08: tooltip 显示路径（含空格），点击后 URL 中空格已编码<br>
+    □ TC-09: 诊断面板出现 E_PARSE_INVALID（非整数行号）<br>
+    □ TC-10: 诊断面板出现，点击 "Copy debug info" 后粘贴确认 JSON 结构完整
+  </div>
+
+</body>
+</html>

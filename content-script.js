@@ -107,7 +107,7 @@
       return null;
     }
 
-    for (let index = parts.length - 2; index >= 1; index -= 1) {
+    for (let index = parts.length - 1; index >= 1; index -= 1) {
       const lineCandidate = Number(parts[index - 1]);
       const columnCandidate = Number(parts[index]);
       if (!Number.isInteger(lineCandidate) || !Number.isInteger(columnCandidate)) {
