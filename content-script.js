@@ -8,7 +8,19 @@
 
   const OVERLAY_ID = "__dom_locator_overlay__";
   const TOOLTIP_ID = "__dom_locator_tooltip__";
+  const DIAG_PANEL_ID = "__dom_locator_diag__";
   const TOOLTIP_OFFSET = 10;
+
+  // P0-1: Deterministic error codes
+  const ERROR_CODES = {
+    E_ATTR_MISSING: "E_ATTR_MISSING",   // element has no inspection attribute
+    E_PARSE_INVALID: "E_PARSE_INVALID", // attribute value cannot be parsed
+    E_ROOT_EMPTY: "E_ROOT_EMPTY",       // workspace root not configured
+    E_OPEN_FAILED: "E_OPEN_FAILED",     // vscode:// protocol trigger failed
+  };
+
+  // Phase labels for diagnostics breadcrumb
+  const PHASES = ["attr", "parse", "map", "open"];
 
   const state = {
     settings: { ...DEFAULT_SETTINGS },
@@ -18,6 +30,7 @@
     parsedValue: null,
     rawValue: "",
     frameId: 0,
+    lastError: null, // P0-1: track last structured error
   };
 
   function isAbsolutePath(input) {
@@ -116,6 +129,44 @@
     }
 
     return null;
+  }
+
+  // P0-1: Compute structured diagnostic for a node interaction
+  // Returns null if all phases pass, or { code, phase, detail, raw } on failure.
+  function computeDiagnostic(rawValue, settings) {
+    // Phase: attr
+    if (!rawValue) {
+      return {
+        code: ERROR_CODES.E_ATTR_MISSING,
+        phase: "attr",
+        detail: `No attribute "${settings.attrName}" found on element or its ancestors.`,
+        raw: "",
+      };
+    }
+
+    // Phase: parse
+    const parsed = parseInspectionValue(rawValue);
+    if (!parsed) {
+      return {
+        code: ERROR_CODES.E_PARSE_INVALID,
+        phase: "parse",
+        detail: `Cannot parse value. Expected format: "relative/path:line:col". Got: "${rawValue}"`,
+        raw: rawValue,
+      };
+    }
+
+    // Phase: map (workspace root check)
+    if (!isAbsolutePath(settings.workspaceRoot)) {
+      return {
+        code: ERROR_CODES.E_ROOT_EMPTY,
+        phase: "map",
+        detail: "Workspace root is not configured. Open extension settings and set an absolute path.",
+        raw: rawValue,
+        parsed,
+      };
+    }
+
+    return null; // all phases clear
   }
 
   function getComposedTarget(event) {
@@ -222,11 +273,11 @@
     }
 
     if (!state.rawValue) {
-      return "No inspection metadata";
+      return `[${ERROR_CODES.E_ATTR_MISSING}] No inspection metadata`;
     }
 
     if (!state.parsedValue) {
-      return `Invalid insp path\n${state.rawValue}`;
+      return `[${ERROR_CODES.E_PARSE_INVALID}] Invalid path\n${state.rawValue}`;
     }
 
     const lines = [
@@ -235,11 +286,178 @@
     ];
 
     if (!isAbsolutePath(state.settings.workspaceRoot)) {
-      lines.push("Workspace root is not configured");
+      lines.push(`[${ERROR_CODES.E_ROOT_EMPTY}] Workspace root not configured`);
     }
 
     return lines.join("\n");
   }
+
+  // ─── P0-2: Diagnostics Panel ─────────────────────────────────────────────
+
+  function buildPhaseBreadcrumb(failedPhase) {
+    return PHASES.map((p) => {
+      const phaseDone = PHASES.indexOf(p) < PHASES.indexOf(failedPhase);
+      const phaseFailed = p === failedPhase;
+      if (phaseFailed) return `${p} ✗`;
+      if (phaseDone) return `${p} ✓`;
+      return `${p} ○`;
+    }).join(" → ");
+  }
+
+  function buildDebugBundle(diagnostic) {
+    return JSON.stringify(
+      {
+        code: diagnostic.code,
+        phase: diagnostic.phase,
+        detail: diagnostic.detail,
+        raw: diagnostic.raw || "",
+        host: window.location.hostname,
+        workspaceRoot: state.settings.workspaceRoot || "",
+        attrName: state.settings.attrName,
+        url: window.location.href,
+        ts: new Date().toISOString(),
+      },
+      null,
+      2
+    );
+  }
+
+  function showDiagPanel(diagnostic) {
+    hideDiagPanel();
+
+    const panel = document.createElement("div");
+    panel.id = DIAG_PANEL_ID;
+
+    Object.assign(panel.style, {
+      position: "fixed",
+      bottom: "20px",
+      right: "20px",
+      maxWidth: "420px",
+      width: "calc(100vw - 40px)",
+      padding: "14px 16px",
+      fontFamily:
+        "ui-monospace, SFMono-Regular, SF Mono, Menlo, Monaco, Consolas, Liberation Mono, monospace",
+      fontSize: "12px",
+      lineHeight: "1.5",
+      color: "#fef3c7",
+      background: "rgba(15, 23, 42, 0.97)",
+      border: "1px solid rgba(251, 191, 36, 0.5)",
+      borderRadius: "10px",
+      boxShadow: "0 12px 40px rgba(0, 0, 0, 0.5)",
+      zIndex: "2147483647",
+      pointerEvents: "all",
+      whiteSpace: "pre-wrap",
+      wordBreak: "break-word",
+    });
+
+    const header = document.createElement("div");
+    Object.assign(header.style, {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: "10px",
+      color: "#ffffff",
+      fontWeight: "bold",
+      fontSize: "12px",
+    });
+    header.innerHTML =
+      '<span>🔍 DOM Locator — Diagnostic</span>';
+
+    const closeBtn = document.createElement("button");
+    closeBtn.textContent = "✕";
+    Object.assign(closeBtn.style, {
+      background: "none",
+      border: "none",
+      color: "#94a3b8",
+      cursor: "pointer",
+      fontSize: "14px",
+      padding: "0 0 0 8px",
+      lineHeight: "1",
+    });
+    closeBtn.addEventListener("click", hideDiagPanel);
+    header.appendChild(closeBtn);
+
+    const divider = document.createElement("div");
+    Object.assign(divider.style, {
+      borderTop: "1px solid rgba(255,255,255,0.1)",
+      marginBottom: "10px",
+    });
+
+    const codeEl = document.createElement("div");
+    Object.assign(codeEl.style, { color: "#fca5a5", fontWeight: "bold", marginBottom: "6px" });
+    codeEl.textContent = `⚠ ${diagnostic.code}`;
+
+    const breadcrumb = document.createElement("div");
+    Object.assign(breadcrumb.style, { color: "#93c5fd", marginBottom: "8px", fontSize: "11px" });
+    breadcrumb.textContent = `Phase: ${buildPhaseBreadcrumb(diagnostic.phase)}`;
+
+    const detail = document.createElement("div");
+    Object.assign(detail.style, { color: "#e2e8f0", marginBottom: "10px" });
+    detail.textContent = diagnostic.detail;
+
+    if (diagnostic.raw) {
+      const rawEl = document.createElement("div");
+      Object.assign(rawEl.style, {
+        color: "#94a3b8",
+        fontSize: "11px",
+        marginBottom: "10px",
+        wordBreak: "break-all",
+      });
+      rawEl.textContent = `Raw: ${diagnostic.raw}`;
+      panel.appendChild(header);
+      panel.appendChild(divider);
+      panel.appendChild(codeEl);
+      panel.appendChild(breadcrumb);
+      panel.appendChild(detail);
+      panel.appendChild(rawEl);
+    } else {
+      panel.appendChild(header);
+      panel.appendChild(divider);
+      panel.appendChild(codeEl);
+      panel.appendChild(breadcrumb);
+      panel.appendChild(detail);
+    }
+
+    const copyBtn = document.createElement("button");
+    copyBtn.textContent = "Copy debug info";
+    Object.assign(copyBtn.style, {
+      background: "rgba(255,255,255,0.08)",
+      border: "1px solid rgba(255,255,255,0.15)",
+      color: "#e2e8f0",
+      cursor: "pointer",
+      fontSize: "11px",
+      padding: "4px 10px",
+      borderRadius: "5px",
+    });
+    copyBtn.addEventListener("click", () => {
+      const bundle = buildDebugBundle(diagnostic);
+      navigator.clipboard
+        .writeText(bundle)
+        .then(() => {
+          copyBtn.textContent = "Copied!";
+          setTimeout(() => {
+            copyBtn.textContent = "Copy debug info";
+          }, 1500);
+        })
+        .catch(() => {
+          copyBtn.textContent = "Copy failed";
+        });
+    });
+    panel.appendChild(copyBtn);
+
+    document.documentElement.appendChild(panel);
+    state.lastError = diagnostic;
+  }
+
+  function hideDiagPanel() {
+    const panel = document.getElementById(DIAG_PANEL_ID);
+    if (panel) {
+      panel.remove();
+    }
+    state.lastError = null;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   function updateOverlayPosition() {
     state.frameId = 0;
@@ -321,6 +539,7 @@
     state.rawValue = "";
     document.documentElement.style.cursor = "";
     hideOverlay();
+    hideDiagPanel();
   }
 
   function isModifierEvent(event) {
@@ -354,28 +573,34 @@
 
     const startNode = getComposedTarget(event);
     const match = findInspectableElement(startNode, state.settings.attrName);
-    if (!match) {
-      return;
-    }
-
-    const rawValue = match.getAttribute(state.settings.attrName) || "";
-    const parsedValue = parseInspectionValue(rawValue);
 
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
 
-    if (!parsedValue || !isAbsolutePath(state.settings.workspaceRoot)) {
+    // P0-1 + P0-2: Compute diagnostic before attempting open
+    const rawValue = match ? match.getAttribute(state.settings.attrName) || "" : "";
+    const diagnostic = computeDiagnostic(rawValue, state.settings);
+
+    if (diagnostic) {
       setHoverNode(match);
+      showDiagPanel(diagnostic);
       return;
     }
 
+    // All phases clear — attempt to open
+    hideDiagPanel();
+    const parsedValue = parseInspectionValue(rawValue);
     const absolutePath = joinAbsolutePath(state.settings.workspaceRoot, parsedValue.relativePath);
     openVsCodeLink(absolutePath, parsedValue.line, parsedValue.column);
   }
 
   function handleKeyDown(event) {
     if (!isModifierEvent(event)) {
+      // Allow Escape to close diagnostics panel even outside inspect mode
+      if (event.key === "Escape" && state.lastError) {
+        hideDiagPanel();
+      }
       return;
     }
 

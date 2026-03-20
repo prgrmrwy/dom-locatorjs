@@ -135,11 +135,185 @@ async function testVsCodeLink() {
   );
 }
 
+// ─── P0-3: Diagnostics Test Matrix ───────────────────────────────────────────
+
+function hostMatchesRule(hostname, rule) {
+  if (!rule) return false;
+  if (rule === "*") return true;
+  if (rule.startsWith("*.")) return hostname.endsWith(rule.slice(1));
+  return hostname === rule;
+}
+
+function renderDiagRow(phase, status, detail) {
+  // status: "ok" | "fail" | "warn"
+  const icons = { ok: "✅", fail: "❌", warn: "⚠️" };
+  const row = document.createElement("div");
+  row.className = "diag-row";
+  row.dataset.status = status;
+
+  const icon = document.createElement("span");
+  icon.className = "diag-icon";
+  icon.textContent = icons[status] || "○";
+
+  const body = document.createElement("div");
+  body.className = "diag-body";
+
+  const phaseEl = document.createElement("div");
+  phaseEl.className = "diag-phase";
+  phaseEl.textContent = phase;
+
+  const detailEl = document.createElement("div");
+  detailEl.className = "diag-detail";
+  detailEl.textContent = detail;
+
+  body.appendChild(phaseEl);
+  body.appendChild(detailEl);
+  row.appendChild(icon);
+  row.appendChild(body);
+  return row;
+}
+
+async function runDiagnosticsMatrix() {
+  const diagResults = document.getElementById("diagResults");
+  const diagButton = document.getElementById("diagButton");
+  diagResults.innerHTML = "";
+  diagButton.disabled = true;
+  diagButton.textContent = "Running…";
+
+  const settings = readForm();
+  const rows = [];
+
+  // Test 1: Host Rule (check active tab hostname against rules)
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs && tabs[0];
+    if (tab && tab.url && !tab.url.startsWith("chrome://")) {
+      const hostname = new URL(tab.url).hostname;
+      const rules = settings.enabledHosts;
+      const matched = rules.some((r) => hostMatchesRule(hostname, r));
+      rows.push(
+        renderDiagRow(
+          "Host Rule",
+          matched ? "ok" : "fail",
+          matched
+            ? `"${hostname}" matches your host rules`
+            : `"${hostname}" does not match any host rule — add it to Enabled Hosts`
+        )
+      );
+    } else if (tab && tab.url && tab.url.startsWith("chrome://")) {
+      rows.push(
+        renderDiagRow("Host Rule", "warn", "Active tab is a Chrome internal page — open a dev page to test")
+      );
+    } else {
+      rows.push(
+        renderDiagRow("Host Rule", "warn", "No active tab found — open a dev page and retry")
+      );
+    }
+  } catch (_) {
+    rows.push(renderDiagRow("Host Rule", "warn", "Cannot access active tab"));
+  }
+
+  // Test 2: Attribute Name
+  const attrOk = Boolean(settings.attrName && settings.attrName.trim());
+  rows.push(
+    renderDiagRow(
+      "Attribute Name",
+      attrOk ? "ok" : "fail",
+      attrOk
+        ? `Looking for: ${settings.attrName}`
+        : "No attribute name configured — use default \"data-insp-path\""
+    )
+  );
+
+  // Test 3: Workspace Root
+  if (!settings.workspaceRoot) {
+    rows.push(
+      renderDiagRow("Workspace Root", "fail", "[E_ROOT_EMPTY] Not configured — set an absolute path above")
+    );
+  } else if (!settings.workspaceRoot.startsWith("/")) {
+    rows.push(
+      renderDiagRow(
+        "Workspace Root",
+        "fail",
+        `[E_ROOT_EMPTY] "${settings.workspaceRoot}" is not an absolute path (must start with /)`
+      )
+    );
+  } else {
+    rows.push(
+      renderDiagRow("Workspace Root", "ok", `Configured: ${settings.workspaceRoot}`)
+    );
+  }
+
+  // Test 4: VS Code Open (attempt vscode:// link via background)
+  const openResult = await new Promise((resolve) => {
+    if (!settings.workspaceRoot || !settings.workspaceRoot.startsWith("/")) {
+      resolve({ ok: false, skipped: true });
+      return;
+    }
+
+    chrome.runtime.sendMessage(
+      {
+        type: "OPEN_IN_VSCODE",
+        payload: { absolutePath: settings.workspaceRoot, line: 1, column: 1 },
+      },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          resolve({ ok: false, error: chrome.runtime.lastError.message });
+          return;
+        }
+
+        resolve(response || { ok: false, error: "No response" });
+      }
+    );
+  });
+
+  if (openResult.skipped) {
+    rows.push(
+      renderDiagRow(
+        "VS Code Open",
+        "warn",
+        "[E_OPEN_FAILED] Skipped — configure workspace root first"
+      )
+    );
+  } else if (openResult.ok) {
+    rows.push(
+      renderDiagRow("VS Code Open", "ok", "VS Code link triggered — check if the file opened")
+    );
+  } else {
+    rows.push(
+      renderDiagRow(
+        "VS Code Open",
+        "fail",
+        `[E_OPEN_FAILED] ${openResult.error || "Failed to open VS Code link"}`
+      )
+    );
+  }
+
+  for (const row of rows) {
+    diagResults.appendChild(row);
+  }
+
+  diagButton.disabled = false;
+  diagButton.textContent = "Run Diagnostics";
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function bindEvents() {
   const elements = getElements();
   elements.form.addEventListener("submit", saveSettings);
   elements.resetButton.addEventListener("click", resetDefaults);
   elements.testButton.addEventListener("click", testVsCodeLink);
+
+  const diagButton = document.getElementById("diagButton");
+  if (diagButton) {
+    diagButton.addEventListener("click", () => {
+      runDiagnosticsMatrix().catch(() => {
+        const diagResults = document.getElementById("diagResults");
+        if (diagResults) diagResults.textContent = "Diagnostics failed unexpectedly.";
+      });
+    });
+  }
 }
 
 bindEvents();
